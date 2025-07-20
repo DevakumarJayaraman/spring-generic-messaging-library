@@ -1,0 +1,2 @@
+# spring-generic-messaging-library
+
