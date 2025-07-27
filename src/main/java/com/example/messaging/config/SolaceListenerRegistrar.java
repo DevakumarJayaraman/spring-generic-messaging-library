@@ -11,42 +11,86 @@ public class SolaceListenerRegistrar {
     private JCSMPSession session;
 
     public SolaceListenerRegistrar() {
-        JCSMPProperties properties = new JCSMPProperties();
-        properties.setProperty(JCSMPProperties.HOST, "tcp://localhost:55555"); // Update with your broker
-        properties.setProperty(JCSMPProperties.USERNAME, "your-username");
-        properties.setProperty(JCSMPProperties.PASSWORD, "your-password");
-        properties.setProperty(JCSMPProperties.VPN_NAME, "default");
         try {
+            JCSMPProperties properties = new JCSMPProperties();
+            properties.setProperty(JCSMPProperties.HOST, "tcp://localhost:55555");
+            properties.setProperty(JCSMPProperties.USERNAME, "admin");
+            properties.setProperty(JCSMPProperties.PASSWORD, "admin");
+            properties.setProperty(JCSMPProperties.VPN_NAME, "default");
             session = JCSMPFactory.onlyInstance().createSession(properties);
             session.connect();
         } catch (Exception e) {
-            e.printStackTrace();
+            System.err.println("Failed to initialize Solace session: " + e.getMessage());
         }
     }
 
     public void registerListener(Object bean, Method method, MessageListener listener) throws JCSMPException {
-        Queue queue = JCSMPFactory.onlyInstance().createQueue("");
-        ConsumerFlowProperties flowProps = new ConsumerFlowProperties();
-        flowProps.setEndpoint(queue);
-        flowProps.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_AUTO);
-        EndpointProperties endpointProps = new EndpointProperties();
-        FlowReceiver consumer = session.createFlow(new XMLMessageListener() {
-            @Override
-            public void onReceive(BytesXMLMessage msg) {
-                try {
-                    String payload = msg.getUserData() != null ? new String(msg.getUserData()) : "";
-                    method.setAccessible(true);
-                    method.invoke(bean, payload);
-                } catch (Exception e) {
+        if (session == null) {
+            System.err.println("Solace session not initialized, cannot register listener");
+            return;
+        }
+
+        String topicName = listener.topic();
+        String queueName = listener.queue();
+        
+        if (!topicName.isEmpty()) {
+            // Register topic listener
+            Topic topic = JCSMPFactory.onlyInstance().createTopic(topicName);
+            XMLMessageConsumer consumer = session.getMessageConsumer(new XMLMessageListener() {
+                @Override
+                public void onReceive(BytesXMLMessage msg) {
+                    try {
+                        String payload = "";
+                        if (msg instanceof TextMessage) {
+                            payload = ((TextMessage) msg).getText();
+                        } else if (msg.getUserData() != null) {
+                            payload = new String(msg.getUserData());
+                        }
+                        method.setAccessible(true);
+                        method.invoke(bean, payload);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+                @Override
+                public void onException(JCSMPException e) {
                     e.printStackTrace();
                 }
-            }
-            @Override
-            public void onException(JCSMPException e) {
-                e.printStackTrace();
-            }
-        }, flowProps, endpointProps);
-        consumer.start();
-        System.out.printf("[SOLACE JCSMP] Listener registered for queue %s%n", listener.queue());
+            });
+            consumer.start();
+            System.out.printf("[SOLACE] Listener registered for topic %s%n", topicName);
+        } else if (!queueName.isEmpty()) {
+            // Register queue listener
+            Queue queue = JCSMPFactory.onlyInstance().createQueue(queueName);
+            ConsumerFlowProperties flowProps = new ConsumerFlowProperties();
+            flowProps.setEndpoint(queue);
+            flowProps.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_AUTO);
+            EndpointProperties endpointProps = new EndpointProperties();
+            FlowReceiver consumer = session.createFlow(new XMLMessageListener() {
+                @Override
+                public void onReceive(BytesXMLMessage msg) {
+                    try {
+                        String payload = "";
+                        if (msg instanceof TextMessage) {
+                            payload = ((TextMessage) msg).getText();
+                        } else if (msg.getUserData() != null) {
+                            payload = new String(msg.getUserData());
+                        }
+                        method.setAccessible(true);
+                        method.invoke(bean, payload);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+                @Override
+                public void onException(JCSMPException e) {
+                    e.printStackTrace();
+                }
+            }, flowProps, endpointProps);
+            consumer.start();
+            System.out.printf("[SOLACE] Listener registered for queue %s%n", queueName);
+        } else {
+            System.err.println("Neither topic nor queue specified for Solace listener");
+        }
     }
 }

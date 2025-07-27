@@ -14,9 +14,13 @@ repositories {
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.kafka:spring-kafka'
     implementation 'com.solacesystems:sol-jcsmp:10.21.0'
-    implementation 'com.solace.messaging:solace-messaging:1.6.0'
+    
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.kafka:spring-kafka-test'
+    // Removed problematic solace-messaging dependency as sol-jcsmp provides messaging functionality
 }
 
 java {
