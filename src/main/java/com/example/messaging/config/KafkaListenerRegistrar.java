@@ -16,8 +16,9 @@ public class KafkaListenerRegistrar {
     private ConsumerFactory<String, String> kafkaConsumerFactory;
 
     public void registerListener(Object bean, Method method, MessageListener listener) {
-        if (kafkaConsumerFactory != null) {
+        if (kafkaConsumerFactory != null && !listener.topic().isEmpty()) {
             ContainerProperties containerProps = new ContainerProperties(listener.topic());
+            containerProps.setGroupId("generic-messaging-library"); // Set default group ID
             containerProps.setMessageListener(new org.springframework.kafka.listener.MessageListener<String, String>() {
                 @Override
                 public void onMessage(ConsumerRecord<String, String> record) {
@@ -33,7 +34,11 @@ public class KafkaListenerRegistrar {
             container.start();
             System.out.printf("[KAFKA] Listener registered for topic %s%n", listener.topic());
         } else {
-            System.out.println("Kafka ConsumerFactory not available.");
+            if (kafkaConsumerFactory == null) {
+                System.out.println("Kafka ConsumerFactory not available.");
+            } else {
+                System.out.println("Kafka topic not specified for listener.");
+            }
         }
     }
 }
