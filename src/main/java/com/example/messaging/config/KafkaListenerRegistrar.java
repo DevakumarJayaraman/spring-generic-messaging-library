@@ -1,6 +1,7 @@
 package com.example.messaging.config;
 
 import com.example.messaging.annotation.MessageListener;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.listener.ContainerProperties;
@@ -17,12 +18,15 @@ public class KafkaListenerRegistrar {
     public void registerListener(Object bean, Method method, MessageListener listener) {
         if (kafkaConsumerFactory != null) {
             ContainerProperties containerProps = new ContainerProperties(listener.topic());
-            containerProps.setMessageListener((org.apache.kafka.clients.consumer.ConsumerRecord<String, String> record) -> {
-                try {
-                    method.setAccessible(true);
-                    method.invoke(bean, record.value());
-                } catch (Exception e) {
-                    e.printStackTrace();
+            containerProps.setMessageListener(new org.springframework.kafka.listener.MessageListener<String, String>() {
+                @Override
+                public void onMessage(ConsumerRecord<String, String> record) {
+                    try {
+                        method.setAccessible(true);
+                        method.invoke(bean, record.value());
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
                 }
             });
             KafkaMessageListenerContainer<String, String> container = new KafkaMessageListenerContainer<>(kafkaConsumerFactory, containerProps);

@@ -8,4 +8,6 @@ import java.lang.annotation.*;
 @Documented
 public @interface MessageListener {
     String provider(); // kafka, solace
+    String topic() default ""; // For Kafka and Solace topics
+    String queue() default ""; // For Solace queues
 }
